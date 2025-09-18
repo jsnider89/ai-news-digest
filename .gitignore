@@ -37,6 +37,7 @@ Thumbs.db
 node_modules/
 frontend/dist/
 frontend/build/
+app/web/static/
 
 # Docker
 .dockerignore
@@ -52,3 +53,14 @@ config/production.yml
 # Old repository folders - exclude from container
 AI-Market-Aggregator-New/
 Market_Aggregator_Production/
+
+# Development artifacts - not needed for deployment
+AGENTS.md
+INTEGRATION_PLAN.md
+migrate_newsletter_fields.py
+test_email.py
+scripts/
+docs/
+frontend/app/
+tests/
+.pytest_cache/
