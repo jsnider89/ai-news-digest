@@ -48,3 +48,7 @@ frontend/build/
 # Config with secrets
 config/secrets.yml
 config/production.yml
+
+# Old repository folders - exclude from container
+AI-Market-Aggregator-New/
+Market_Aggregator_Production/
