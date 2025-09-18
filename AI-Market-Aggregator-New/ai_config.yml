@@ -1,0 +1,25 @@
+# AI Provider Configuration for the Market Intelligence System
+#
+# This file defines the cascade of AI providers the system will use.
+# The system will try the "primary" provider first. If that fails, it will
+# try the first "fallback" provider, and so on.
+#
+# Supported providers: "openai", "gemini", "anthropic"
+#
+# You can specify provider-specific parameters like "model", "reasoning_effort", etc.
+# Ensure the corresponding API key for each listed provider is set in your
+# environment variables (.env file for local, GitHub secrets for production).
+
+# The 'pipeline' key should contain a list of provider configurations.
+# The first entry is the primary, the second is the first fallback, and so on.
+pipeline:
+  - provider: "openai"
+    model: "gpt-5-mini" # More up-to-date model name
+    reasoning_effort: "medium"
+    verbosity: "medium"
+
+  - provider: "gemini"
+    model: "gemini-2.5-flash" # More up-to-date model name
+
+  - provider: "anthropic"
+    model: "claude-3-haiku-20240307" # More up-to-date model name

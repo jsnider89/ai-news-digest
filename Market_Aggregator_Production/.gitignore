@@ -1,0 +1,15 @@
+# Node / Vite
+node_modules/
+dist/
+.wrangler/
+.cache/
+
+# Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Env
+.env*
+.dev.vars
+_ref_repo/

@@ -1,0 +1,15 @@
+alembic
+apscheduler
+fastapi
+feedparser
+httpx
+markdown
+pydantic
+pyyaml
+python-dotenv
+resend
+sqlalchemy
+uvicorn[standard]
+aiosqlite
+tzlocal
+bleach

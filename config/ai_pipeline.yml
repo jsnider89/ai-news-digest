@@ -1,0 +1,9 @@
+pipeline:
+  - provider: "openai"
+    model: "gpt-5-mini"
+    reasoning_effort: "medium"
+    verbosity: "medium"
+  - provider: "gemini"
+    model: "gemini-2.5-flash"
+  - provider: "anthropic"
+    model: "claude-3-haiku-20240307"

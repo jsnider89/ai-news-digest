@@ -1,0 +1,27 @@
+name = "ai-market-intel-worker"
+main = "./src/index.ts"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ai_market_intel_db"
+database_id = "87fe856f-59b3-4548-8b38-2e15bca4e738"
+
+[[kv_namespaces]]
+binding = "MARKET_FLAGS"
+id = "fa6e9f8229d64507af061fdce39c6195"
+
+[vars]
+# Toggle to allow local/dev without Access
+DEV_MODE = "0"
+GEMINI_MODEL_ID = "gemini-2.5-flash"
+# Optionally restrict cross-origin for admin UI
+# ALLOWED_ORIGIN = "https://YOUR-PAGES-SUBDOMAIN.ai-market-intel-admin.pages.dev"
+# Optional default from email (must be a verified domain in Resend)
+# RESEND_FROM = "Market Intel <digest@yourdomain.com>"
+
+[triggers]
+# UTC times; adjust for DST or use timezone if supported by your account.
+# 06:30 MT ~= 12:30 UTC during DST; 17:30 MT ~= 23:30 UTC during DST
+crons = ["30 12 * * *", "30 23 * * *"]
+timezone = "America/Denver"
