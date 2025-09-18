@@ -1,9 +1,0 @@
-{
-  "name": "ai-market-intel-worker",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "fast-xml-parser": "^4.3.6"
-  }
-}
