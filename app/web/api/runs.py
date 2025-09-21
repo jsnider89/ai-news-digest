@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data import repositories
+from app.utils.time_utils import format_local_time
 
 from . import deps, schemas
 
@@ -22,8 +23,8 @@ async def list_runs(limit: int = 20, db: AsyncSession = Depends(deps.get_db)):
                 newsletter_id=run.newsletter_id,
                 newsletter_name=run.newsletter.name if run.newsletter else "",
                 status=run.status,
-                started_at=run.started_at,
-                finished_at=run.finished_at,
+                started_at=format_local_time(run.started_at),
+                finished_at=format_local_time(run.finished_at),
                 ai_provider=run.ai_provider,
                 article_count=run.article_count,
                 error_message=run.error_message,

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import json
@@ -15,6 +16,8 @@ from app.data import repositories
 from app.email.mailer import DigestMetadata, DigestRenderer, ResendMailer
 from app.ingest.market_data import MarketDataClient
 from app.ingest.rss import FeedDefinition, RSSFetcher
+from app.utils.time_utils import now_local, to_local_time
+import html
 
 logger = logging.getLogger("market_aggregator.pipeline")
 
@@ -76,26 +79,34 @@ class NewsletterPipeline:
             )
 
     async def run(self, config: NewsletterConfig) -> RunResult:
-        started_at = datetime.utcnow()
+        started_at_local = now_local()
+        started_at = started_at_local.astimezone(timezone.utc).replace(tzinfo=None)
         logger.info("Starting newsletter run for %s", config.name)
 
         ai_client = AIClient()
         rss_fetcher = RSSFetcher()
         market_client = MarketDataClient(api_key=os.getenv("FINNHUB_API_KEY"))
 
+        quotes: list[dict] = []
+        market_prompt_block: str | None = None
+
         try:
             articles, statuses = await rss_fetcher.fetch_many(list(config.feeds))
             ranked_articles = rank_articles(articles)
             watchlist = [ticker.upper() for ticker in config.watchlist if ticker]
-            quotes = []
             if watchlist:
                 quotes = await market_client.fetch_quotes(watchlist)
-            market_text = format_market_data(quotes) if quotes else None
+            market_prompt_block = build_market_prompt(
+                quotes,
+                statuses=statuses,
+                article_count=len(articles),
+                run_started_at=started_at_local,
+            )
             articles_text = build_article_context(articles, ranked_articles=ranked_articles)
 
             prompt = build_prompt(
                 articles_text=articles_text,
-                market_text=market_text,
+                market_text=market_prompt_block,
                 watchlist=watchlist,
                 newsletter_type=config.newsletter_type,
                 custom_prompt=config.custom_prompt,
@@ -119,14 +130,26 @@ class NewsletterPipeline:
                 article_count=len(articles),
                 feed_successes=sum(1 for status in statuses if status.startswith("✅")),
                 feed_total=len(statuses),
-                run_started_at=started_at,
+                run_started_at=started_at_local,
+                is_market_newsletter=bool(config.watchlist),
             )
-            html_content = self.renderer.render(analysis, metadata)
+            market_section_html = render_market_section(
+                quotes,
+                statuses=statuses,
+                article_count=len(articles),
+                run_started_at=started_at_local,
+                ai_provider=provider,
+            )
+            html_content = self.renderer.render(
+                analysis,
+                metadata,
+                market_intro_html=market_section_html,
+            )
 
             # Get current mailer with effective settings
             current_mailer = await self._get_current_mailer()
             recipients = _coerce_recipient_list(config.recipients, fallback=None)
-            subject = f"{config.name} Digest - {started_at.strftime('%Y-%m-%d')}"
+            subject = f"{config.name} Digest - {started_at_local.strftime('%Y-%m-%d')}"
             error_message = None
             success = False
 
@@ -142,7 +165,8 @@ class NewsletterPipeline:
                 if not success:
                     error_message = "Email send failed"
 
-            finished_at = datetime.utcnow()
+            finished_at_local = now_local()
+            finished_at = finished_at_local.astimezone(timezone.utc).replace(tzinfo=None)
             return RunResult(
                 newsletter=config,
                 success=success,
@@ -158,7 +182,8 @@ class NewsletterPipeline:
             )
         except Exception as exc:
             logger.exception("Newsletter run failed for %s", config.name)
-            finished_at = datetime.utcnow()
+            finished_at_local = now_local()
+            finished_at = finished_at_local.astimezone(timezone.utc).replace(tzinfo=None)
             return RunResult(
                 newsletter=config,
                 success=False,
@@ -240,25 +265,170 @@ def build_article_context(
     return "\n".join(lines).strip()
 
 
-def format_market_data(quotes: Sequence[dict]) -> str:
+def build_market_prompt(
+    quotes: Sequence[dict],
+    *,
+    statuses: Sequence[str],
+    article_count: int,
+    run_started_at: datetime,
+) -> str | None:
     if not quotes:
-        return ""
-    headers = "| Symbol | Price | Change | % |\n| --- | ---: | ---: | ---: |"
-    rows = []
+        return None
+
+    lines = ["| Symbol | Price | Change | % |", "| --- | ---: | ---: | ---: |"]
     for quote in quotes:
+        symbol = quote.get("symbol", "?")
         if quote.get("error"):
-            rows.append(f"| {quote['symbol']} | N/A | {quote['error']} | |")
+            lines.append(f"| {symbol} | — | {quote['error']} | — |")
             continue
-        rows.append(
-            "| {symbol} | ${current:.2f} | {sign}{change:.2f} | {sign}{pct:.2f}% |".format(
-                symbol=quote["symbol"],
-                current=quote["current"],
-                change=abs(quote["change"]),
-                pct=abs(quote["change_percent"]),
-                sign="+" if quote["change"] >= 0 else "-",
-            )
+
+        price_value = _safe_float(quote.get("current"))
+        change_value = _safe_float(quote.get("change"))
+        pct_value = _safe_float(quote.get("change_percent"))
+
+        price_text = _format_price(price_value)
+
+        if change_value != change_value:
+            change_text = "—"
+        else:
+            arrow = "▲" if change_value >= 0 else "▼"
+            change_text = f"{arrow} {'+' if change_value >= 0 else ''}{change_value:.2f}"
+
+        if pct_value != pct_value:
+            pct_text = "—"
+        else:
+            arrow_pct = "▲" if pct_value >= 0 else "▼"
+            pct_text = f"{arrow_pct} {'+' if pct_value >= 0 else ''}{pct_value:.2f}%"
+
+        lines.append(f"| {symbol} | {price_text} | {change_text} | {pct_text} |")
+
+    success_count = sum(1 for status in statuses if status.startswith("✅"))
+    feed_count = len(statuses)
+    failure_count = max(feed_count - success_count, 0)
+    date_label = _format_market_day(run_started_at)
+    lines.append(
+        "\nContext: analyzed {feed_count} feeds ({success_count} healthy, {failure_count} issues) and {article_count} articles on {date_label}.".format(
+            feed_count=feed_count,
+            success_count=success_count,
+            failure_count=failure_count,
+            article_count=article_count,
+            date_label=date_label,
         )
-    return "\n".join([headers, *rows])
+    )
+    return "\n".join(lines)
+
+
+
+def render_market_section(
+    quotes: Sequence[dict],
+    *,
+    statuses: Sequence[str],
+    article_count: int,
+    run_started_at: datetime,
+    ai_provider: str,
+) -> str | None:
+    if not quotes:
+        return None
+
+    table_style = "border-collapse:collapse;width:100%;margin:8px 0 16px;"
+    th_base = (
+        "padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-size:13px;"
+        "font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;"
+    )
+    td_base = (
+        "padding:8px;border:1px solid #e5e7eb;font-size:14px;"
+        "font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;"
+    )
+    td_symbol = td_base + "text-align:left;white-space:nowrap;"
+    td_numeric = td_base + "text-align:right;white-space:nowrap;"
+
+    rows_html: list[str] = []
+    for quote in quotes:
+        symbol = _escape_html(str(quote.get("symbol", "?")))
+        error_message = quote.get("error")
+        if error_message:
+            rows_html.append(
+                "    <tr role=\"row\">"
+                f"<td style=\"{td_symbol}\"><strong>{symbol}</strong></td>"
+                f"<td style=\"{td_numeric}\">—</td>"
+                f"<td style=\"{td_numeric}color:#dc2626;\">{_escape_html(str(error_message))}</td>"
+                f"<td style=\"{td_numeric}\">—</td>"
+                "</tr>"
+            )
+            continue
+
+        price_value = _safe_float(quote.get("current"))
+        change_value = _safe_float(quote.get("change"))
+        pct_value = _safe_float(quote.get("change_percent"))
+
+        price_text = _format_price(price_value)
+        change_text, change_style = _format_delta(change_value, td_numeric)
+        pct_text, pct_style = _format_delta(pct_value, td_numeric, suffix="%")
+
+        rows_html.append(
+            "    <tr role=\"row\">"
+            f"<td style=\"{td_symbol}\"><strong>{symbol}</strong></td>"
+            f"<td style=\"{td_numeric}\">{price_text}</td>"
+            f"<td style=\"{change_style}\">{change_text}</td>"
+            f"<td style=\"{pct_style}\">{pct_text}</td>"
+            "</tr>"
+        )
+
+    table_html = """
+<table role="table" aria-label="Market Performance" cellpadding="0" cellspacing="0" style="{table_style}">
+  <thead>
+    <tr role="row">
+      <th role="columnheader" scope="col" style="{th_base}text-align:left;">Symbol</th>
+      <th role="columnheader" scope="col" style="{th_base}text-align:right;">Price</th>
+      <th role="columnheader" scope="col" style="{th_base}text-align:right;">Change</th>
+      <th role="columnheader" scope="col" style="{th_base}text-align:right;">%</th>
+    </tr>
+  </thead>
+  <tbody>
+{rows}
+  </tbody>
+</table>
+""".format(table_style=table_style, th_base=th_base, rows="\n".join(rows_html))
+
+    return table_html
+
+def _format_price(value: float) -> str:
+    if value != value:
+        return "—"
+    return f"{value:.2f}"
+
+
+def _format_delta(value: float, base_style: str, *, suffix: str = "") -> tuple[str, str]:
+    if value != value:
+        return "—", base_style
+    is_up = value >= 0
+    arrow = "▲" if is_up else "▼"
+    color = "#16a34a" if is_up else "#dc2626"
+    text = f"{arrow} {'+' if is_up else ''}{value:.2f}{suffix}"
+    style = f"{base_style}color:{color};"
+    return text, style
+
+
+def _escape_html(value: str) -> str:
+    return html.escape(value, quote=True)
+
+
+def _safe_float(value: object) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return math.nan
+    if result != result:  # already NaN
+        return math.nan
+    return result
+
+
+def _format_market_day(run_started_at: datetime) -> str:
+    local_dt = to_local_time(run_started_at)
+    day_name = local_dt.strftime("%A")
+    month_name = local_dt.strftime("%b")
+    day_number = local_dt.day
+    return f"{day_name}, {month_name} {day_number} – Market Day"
 
 
 def _coerce_recipient_list(

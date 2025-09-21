@@ -64,3 +64,5 @@ docs/
 frontend/app/
 tests/
 .pytest_cache/
+.claude/
+development_backup/

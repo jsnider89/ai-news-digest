@@ -26,6 +26,8 @@ export const App: React.FC = () => {
       .then((options) => {
         setMeta(options)
         setMetaError(null)
+        // Update document title with app name
+        document.title = options.app_name ? `${options.app_name} Admin` : 'Admin Panel'
       })
       .catch((error) => {
         console.error('Failed to load meta options', error)
@@ -69,7 +71,7 @@ export const App: React.FC = () => {
       <header className="app-header">
         <div className="container">
           <div className="header-bar">
-            <h1 className="app-title">Market Aggregator Admin</h1>
+            <h1 className="app-title">{meta?.app_name ? `${meta.app_name} Admin` : 'Admin'}</h1>
             <button
               className="nav-toggle"
               type="button"
@@ -100,7 +102,7 @@ export const App: React.FC = () => {
       <main className="app-main">
         <div className="container">
           {metaError && <div className="alert">{metaError}</div>}
-          {view === 'dashboard' && <DashboardPage />}
+          {view === 'dashboard' && <DashboardPage meta={meta} />}
           {view === 'newsletters' && <NewslettersPage meta={meta} />}
           {view === 'health' && <HealthPage />}
           {view === 'settings' && <SettingsPage meta={meta} />}

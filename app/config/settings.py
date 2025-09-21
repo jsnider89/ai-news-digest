@@ -17,7 +17,7 @@ except ImportError:  # Python < 3.9 fallback
     from backports.zoneinfo import ZoneInfo  # type: ignore
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def _detect_timezone() -> str:

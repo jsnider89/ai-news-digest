@@ -5,7 +5,7 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: resolve(__dirname, '../app/web/static'),
+    outDir: 'dist',
     emptyOutDir: true,
   },
   server: {

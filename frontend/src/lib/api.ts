@@ -158,6 +158,7 @@ export interface MetaOptions {
   models: Array<{ value: string; label: string; provider: string; supports_reasoning: boolean }>
   reasoning_levels: string[]
   default_timezone: string
+  app_name: string
 }
 
 export interface LogEntry {

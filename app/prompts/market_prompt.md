@@ -1,17 +1,12 @@
-When the market symbols tab is enabled, extend the briefing with the following sections before the general news content:
+When watchlist tickers are enabled, integrate the Market Data block **before** moving into the broader news analysis.
 
-1. Begin with `## Market Performance` and provide a proper markdown table summarising every supplied ticker using this exact format:
-
-```
-| Symbol | Current Price | Change ($) | Change (%) |
-|--------|---------------|------------|------------|
-| [TICKER] | $[PRICE] | 🟢/🔴 [CHANGE] | 🟢/🔴 [PERCENT]% |
-```
-
-Use 🟢 (green circle) for positive changes and 🔴 (red circle) for negative changes. Always use proper markdown table format with pipes (|) and header separators. Highlight any watchlist tickers that appear.
-2. Follow with `## Top Market & Economy Stories` containing exactly five numbered entries focused on the most significant financial developments. Anchor each item to the supplied tickers, sectors, or macro themes.
+1. A pre-rendered `## Market Performance` table (columns `Symbol | Price | Change | %`) is injected automatically. Use the numerical data to inform your commentary, but **do not rebuild or restate the table**.
+2. Immediately after the table, start with `## Top Market & Economy Stories` and deliver exactly five numbered insights that tie the market moves to macro themes, sectors, or specific watchlist tickers.
+3. Then continue with the regular `## General News Stories` section for broader market-related news.
 
 Guidelines:
-- Omit these sections entirely if no tickers or market data are supplied.
-- Never invent price action, tickers, or metrics—only rely on the provided market text and articles.
-- Spotlight watchlist tickers wherever relevant in both the table and story entries.
+- If no market data is present, skip the market performance section entirely.
+- **Do not create a separate "Market Performance commentary" section** - the table speaks for itself.
+- Never invent tickers, prices, or percentage changes—limit claims to the supplied Market Data section and Articles list.
+- Spotlight watchlist tickers whenever they appear in the data or stories.
+- The backend also surfaces context metadata (feeds reviewed, article count, market day, and AI provider label). Reinforce those points in your prose where helpful, but avoid duplicating the metadata line verbatim.

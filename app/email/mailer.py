@@ -3,12 +3,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import html
 import logging
 from typing import Iterable, Sequence
 
 import bleach
 import markdown
 import resend
+try:
+    from bleach.css_sanitizer import CSSSanitizer
+except ImportError:  # pragma: no cover - bleach<5 compatibility
+    CSSSanitizer = None  # type: ignore[misc]
+
+from app.utils.market_time import format_market_badge, format_date_badge
 
 logger = logging.getLogger("market_aggregator.email")
 
@@ -21,6 +28,7 @@ class DigestMetadata:
     feed_successes: int
     feed_total: int
     run_started_at: datetime
+    is_market_newsletter: bool = False
 
 
 class DigestRenderer:
@@ -32,20 +40,90 @@ class DigestRenderer:
             output_format="xhtml",
         )
         self._allowed_tags = set(bleach.sanitizer.ALLOWED_TAGS).union(
-            {"p", "h1", "h2", "h3", "h4", "table", "thead", "tbody", "tr", "th", "td", "hr"}
+            {"p", "h1", "h2", "h3", "h4", "table", "thead", "tbody", "tr", "th", "td", "hr", "span"}
         )
-        self._allowed_attrs = {"a": ["href", "title", "rel"], "th": ["align"], "td": ["align"]}
+        self._allowed_attrs = {
+            "a": ["href", "title", "rel"],
+            "th": ["align", "style"],
+            "td": ["align", "style"],
+            "table": ["style", "class"],
+            "span": ["style"],
+            "p": ["style", "class"]
+        }
+        self._allowed_css_props = [
+            "color",
+            "font-weight",
+            "text-align",
+            "padding",
+            "border",
+            "border-collapse",
+            "width",
+            "margin",
+            "font-size",
+            "font-family",
+            "background",
+            "white-space",
+        ]
+        self._cleaner = self._build_cleaner()
 
-    def render(self, markdown_body: str, metadata: DigestMetadata) -> str:
+    def render(
+        self,
+        markdown_body: str,
+        metadata: DigestMetadata,
+        *,
+        market_intro_html: str | None = None,
+    ) -> str:
         self._markdown.reset()
         dirty_html = self._markdown.convert(markdown_body or "")
-        cleaned_html = bleach.clean(
+        cleaned_html = self._clean_html(dirty_html)
+
+        # Use conditional badge based on newsletter type
+        if metadata.is_market_newsletter:
+            badge_text, badge_style = format_market_badge(metadata.run_started_at)
+        else:
+            badge_text, badge_style = format_date_badge(metadata.run_started_at)
+
+        # Create badge with run time underneath
+        run_time = metadata.run_started_at.strftime("%Y-%m-%d %H:%M %Z")
+        badge_html = f"""<div style="{badge_style}">{badge_text}</div>
+<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;color:#666;margin-top:4px;">Run started: {run_time}</div>"""
+
+        # Simplified metadata - remove duplicates from header template
+        meta_html = (
+            "<div style=\"font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px;color:#444;margin:8px 0;\">"
+            f"<div><strong>Analysis by:</strong> {html.escape(metadata.ai_provider)}</div>"
+            f"<div><strong>Articles:</strong> {metadata.article_count} • <strong>Feeds:</strong> {metadata.feed_successes}/{metadata.feed_total}</div>"
+            "</div>"
+        )
+        sections = [badge_html, meta_html]
+        if market_intro_html:
+            sections.append(market_intro_html)
+        sections.append(cleaned_html)
+        body_html = "\n".join(section for section in sections if section)
+        return _wrap_template(body_html, metadata)
+
+    def _build_cleaner(self):
+        if CSSSanitizer is None:
+            return None
+        css = CSSSanitizer(allowed_css_properties=self._allowed_css_props)
+        return bleach.Cleaner(
+            tags=self._allowed_tags,
+            attributes=self._allowed_attrs,
+            css_sanitizer=css,
+            strip=True,
+        )
+
+    def _clean_html(self, dirty_html: str) -> str:
+        if self._cleaner is not None:
+            return self._cleaner.clean(dirty_html)
+
+        # Fallback for older bleach versions without CSSSanitizer support
+        return bleach.clean(
             dirty_html,
             tags=self._allowed_tags,
             attributes=self._allowed_attrs,
             strip=True,
         )
-        return _wrap_template(cleaned_html, metadata)
 
 
 class ResendMailer:
@@ -123,18 +201,6 @@ def _wrap_template(html_body: str, metadata: DigestMetadata) -> str:
       padding: 32px 28px;
       box-shadow: 0 18px 30px rgba(15, 23, 42, 0.08);
     }}
-    .meta {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      font-size: 13px;
-      color: #475467;
-    }}
-    .meta span {{
-      background: #eef2ff;
-      border-radius: 999px;
-      padding: 6px 12px;
-    }}
     .content h1, .content h2, .content h3 {{
       color: #111827;
       margin-top: 28px;
@@ -155,7 +221,6 @@ def _wrap_template(html_body: str, metadata: DigestMetadata) -> str:
     }}
     @media (max-width: 640px) {{
       .card {{ padding: 24px 20px; }}
-      .meta {{ flex-direction: column; align-items: flex-start; }}
     }}
   </style>
 </head>
@@ -163,16 +228,9 @@ def _wrap_template(html_body: str, metadata: DigestMetadata) -> str:
   <div class="container">
     <div class="card">
       <h1 style="margin-top: 0;">{metadata.newsletter_name} Digest</h1>
-      <div class="meta">
-        <span>AI Provider: {metadata.ai_provider}</span>
-        <span>Articles: {metadata.article_count}</span>
-        <span>Feeds: {metadata.feed_successes}/{metadata.feed_total}</span>
-        <span>Run started: {run_time}</span>
-      </div>
       <div class="content">{html_body}</div>
     </div>
   </div>
 </body>
 </html>
 """
-

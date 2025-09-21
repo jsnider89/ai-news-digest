@@ -35,6 +35,9 @@ async def run_newsletter_once(newsletter_id: int) -> dict:
                 html_content=html_content,
                 subject=subject,
             )
+
+            # Note: session.commit() will be called by session_scope() context manager
+
             logger.info("Run complete for newsletter %s", newsletter.name)
             response = {
                 "newsletter_id": newsletter.id,
@@ -49,19 +52,24 @@ async def run_newsletter_once(newsletter_id: int) -> dict:
         if response is None:  # pragma: no cover - defensive
             raise RuntimeError("Run response not generated")
 
-        await repositories.append_run_logs(
-            session,
-            run_id=response["run_id"],
-            entries=[
-                {
-                    "timestamp": entry["timestamp"],
-                    "level": entry["level"],
-                    "logger": entry["logger"],
-                    "message": entry["message"],
-                    "exception": entry.get("exception"),
-                }
-                for entry in captured_logs
-            ],
-        )
+        # Try to append logs, but don't fail the entire run if this fails
+        try:
+            await repositories.append_run_logs(
+                session,
+                run_id=response["run_id"],
+                entries=[
+                    {
+                        "timestamp": entry["timestamp"],
+                        "level": entry["level"],
+                        "logger": entry["logger"],
+                        "message": entry["message"],
+                        "exception": entry.get("exception"),
+                    }
+                    for entry in captured_logs
+                ],
+            )
+            logger.info("Successfully appended %d log entries for run %s", len(captured_logs), response["run_id"])
+        except Exception as exc:
+            logger.error("Failed to append run logs for run %s: %s", response["run_id"], exc, exc_info=True)
 
         return response

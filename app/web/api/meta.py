@@ -33,4 +33,5 @@ def get_options() -> dict:
         "models": model_options,
         "reasoning_levels": settings.available_reasoning_levels,
         "default_timezone": settings.default_timezone,
+        "app_name": settings.app_name,
     }

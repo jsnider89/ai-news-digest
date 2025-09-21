@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data import repositories
 from app.utils.log_buffer import get_log_buffer_handler
+from app.utils.time_utils import format_local_time
 
 from . import deps
 
@@ -24,7 +25,7 @@ async def list_logs(
         return {
             "entries": [
                 {
-                    "timestamp": (entry.timestamp.isoformat() if entry.timestamp else None),
+                    "timestamp": format_local_time(entry.timestamp),
                     "level": entry.level,
                     "logger": entry.logger,
                     "message": entry.message,

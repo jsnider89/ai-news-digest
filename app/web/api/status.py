@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 from app.data import models
 from app.data.database import SessionLocal
 from app.tasks.scheduler import scheduler
+from app.utils.time_utils import format_local_time, now_local, local_date_start
 
 router = APIRouter(tags=["status"])
 
@@ -22,8 +23,8 @@ def _serialize_run(record: models.RunRecord | None) -> dict | None:
         "newsletter_id": record.newsletter_id,
         "newsletter_name": record.newsletter.name if record.newsletter else "",
         "status": record.status,
-        "started_at": record.started_at.isoformat() if record.started_at else None,
-        "finished_at": record.finished_at.isoformat() if record.finished_at else None,
+        "started_at": format_local_time(record.started_at),
+        "finished_at": format_local_time(record.finished_at),
         "ai_provider": record.ai_provider,
         "article_count": record.article_count,
         "error_message": record.error_message,
@@ -32,8 +33,8 @@ def _serialize_run(record: models.RunRecord | None) -> dict | None:
 
 @router.get("/health")
 async def healthcheck() -> dict:
-    now = datetime.now(timezone.utc)
-    today_start = now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+    now = now_local()
+    today_start = local_date_start().replace(tzinfo=None)
 
     async with SessionLocal() as session:
         total_newsletters = await session.scalar(select(func.count(models.Newsletter.id))) or 0
@@ -110,7 +111,7 @@ async def healthcheck() -> dict:
                     newsletter_id = int(parts[1])
                 except ValueError:
                     newsletter_id = None
-        next_run_time = job.next_run_time.isoformat() if job.next_run_time else None
+        next_run_time = format_local_time(job.next_run_time)
         scheduler_jobs.append(
             {
                 "id": job.id,

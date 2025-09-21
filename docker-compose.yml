@@ -6,7 +6,7 @@ services:
     container_name: ai-news-digest
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "${PORT:-8002}:${PORT:-8002}"
     volumes:
       - ./data:/data
       - ./config:/app/config

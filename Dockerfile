@@ -36,7 +36,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY app ./app
 COPY config ./config
 COPY data ./data
-COPY INTEGRATION_PLAN.md ./INTEGRATION_PLAN.md
 
 # Copy built frontend into FastAPI static directory
 COPY --from=frontend-builder /frontend/dist ./app/web/static
@@ -50,11 +49,11 @@ RUN mkdir -p /data && chown -R appuser:appuser /app /data
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/api/status/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/api/status/health || exit 1
 
 # Switch to non-root user
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8002
 VOLUME ["/data"]
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { getHealth, HealthResponse } from '../lib/api'
+import { getHealth, HealthResponse, MetaOptions } from '../lib/api'
 
 const REFRESH_MS = 30_000
 
@@ -18,7 +18,11 @@ const statusLabel: Record<string, { label: string; className: string }> = {
   issues: { label: 'Attention Needed', className: 'status-pill issues' },
 }
 
-export const DashboardPage: React.FC = () => {
+interface Props {
+  meta: MetaOptions | null
+}
+
+export const DashboardPage: React.FC<Props> = ({ meta }) => {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +65,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="page dashboard">
       <div className="hero">
-        <div className="tagline">Market Aggregator Control Center</div>
+        <div className="tagline">{meta?.app_name ? `${meta.app_name} Control Center` : 'Control Center'}</div>
         <h2>Operational Overview</h2>
         <p>Monitor newsletter health, pipeline performance, and upcoming schedules at a glance.</p>
         <div className={statusMeta.className}>

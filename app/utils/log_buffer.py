@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Deque, List
 
+from app.utils.time_utils import get_local_timezone
+
 
 class LogBufferHandler(logging.Handler):
     """Logging handler that keeps a rolling buffer of formatted log records."""
@@ -25,7 +27,7 @@ class LogBufferHandler(logging.Handler):
             message = record.getMessage()
 
         entry = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).astimezone(get_local_timezone()).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": message,
