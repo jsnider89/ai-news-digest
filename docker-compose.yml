@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ai-news-digest:
     build: .
@@ -9,7 +7,6 @@ services:
       - "${PORT:-8002}:${PORT:-8002}"
     networks:
       - ai-news-digest-network
-      - traefik
     volumes:
       - ./data:/data
       - ./config:/app/config
@@ -24,21 +21,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    depends_on: []
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik"
-      - "traefik.http.routers.digest.rule=Host(`digest.externalaccesshome.com`)"
-      - "traefik.http.routers.digest.entrypoints=https"
-      - "traefik.http.routers.digest.tls=true"
-      - "traefik.http.routers.digest.tls.certresolver=cloudflare"
-      - "traefik.http.services.digest.loadbalancer.server.port=8002"
 
 networks:
   ai-news-digest-network:
     driver: bridge
-  traefik:
-    external: true
 
 volumes:
   data:
