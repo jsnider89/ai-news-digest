@@ -8,4 +8,4 @@ Keep prose crisp and executive-friendly, prefer concrete facts over speculation,
 - Each story should be visually distinct and easy to identify.
 - Include all relevant statistics, percentages, dollar amounts, and quantitative data.
 - Use specific numbers and metrics to support each story.
-- Source citations should be clear at the end of each item.
+- Source citations should be clear at the end of each item. Include direct links to the best representation for each story (ie. if there are 7 sources, only provide the one that seems like it has the most detail and is the most reliable).

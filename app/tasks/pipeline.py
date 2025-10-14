@@ -112,6 +112,15 @@ class NewsletterPipeline:
                 custom_prompt=config.custom_prompt,
             )
             analysis, provider, usage = ai_client.generate(prompt, system_prompt=load_system_prompt(), verbosity=config.verbosity_level)
+
+            # Remove duplicate market table if AI included it despite instructions
+            if market_prompt_block:
+                original_length = len(analysis)
+                analysis = _remove_duplicate_market_table(analysis)
+                if len(analysis) < original_length:
+                    logger.info("Removed duplicate market table from AI output (%d chars removed)", original_length - len(analysis))
+                else:
+                    logger.debug("No duplicate market table found in AI output")
             if usage:
                 prompt_tokens = usage.get("prompt_tokens")
                 completion_tokens = usage.get("completion_tokens")
@@ -238,8 +247,26 @@ def build_article_context(
                 lines.append(f"  Source: {link}")
         lines.append("")
 
+    # Track article keys that already appeared in "Top stories" to avoid duplicates
+    used_article_keys: set[str] = set()
+    if ranked_articles:
+        for entry in ranked_articles[:top_limit]:
+            # Use the same key logic as rank_articles() to identify duplicates
+            link = (entry.get("link") or "").strip().lower()
+            if link:
+                key = link.split("#", 1)[0]
+            else:
+                key = (entry.get("title") or "").strip().lower()
+            if key:
+                used_article_keys.add(key)
+
     grouped: dict[str, list[dict]] = {}
     for article in articles:
+        # Skip articles that already appeared in "Top stories" section
+        article_key = _article_key(article)
+        if article_key in used_article_keys:
+            continue
+
         source = article.get("source", "Unknown") or "Unknown"
         grouped.setdefault(source, []).append(article)
 
@@ -492,7 +519,7 @@ def rank_articles(
     articles: Sequence[dict],
     *,
     recent_hours: int = 24,
-    decay_window_hours: int = 72,
+    decay_window_hours: int = 24,
 ) -> list[dict]:
     """Aggregate and score articles by recency and mention frequency."""
 
@@ -544,7 +571,7 @@ def rank_articles(
         recent_boost = 1.0 if age_hours <= recent_window else max(0.0, 1.0 - ((age_hours - recent_window) / decay_window))
 
         spread_factor = min(len(data["sources"]), data["mention_count"])
-        score = (spread_factor * 2.5) + (data["mention_count"] * 0.5) + (recency_bonus * 3.0) + (recent_boost * 2.0)
+        score = (spread_factor * 1.0) + (data["mention_count"] * 0.5) + (recency_bonus * 3.0) + (recent_boost * 3.0)
 
         ranked.append(
             {
@@ -601,3 +628,27 @@ def _datetime_to_timestamp(value: datetime | None) -> float:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.timestamp()
+
+
+def _remove_duplicate_market_table(text: str) -> str:
+    """Remove AI-generated market performance table since we inject our own HTML version."""
+    import re
+
+    # Pattern to match:
+    # ## Market Performance (with optional newlines/spaces)
+    # | Symbol | Price | Change | % |
+    # | --- | ---: | ---: | ---: |
+    # | ... table rows ...
+
+    # More flexible pattern to catch various formatting
+    pattern = r'##\s*Market\s+Performance\s*[\r\n]+\s*\|[^\n]+\|[\r\n]+\s*\|[-:\s|]+\|[\r\n]+(?:\s*\|[^\n]+\|[\r\n]+)+'
+
+    # Remove the matched section
+    cleaned = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+
+    # Also try to catch if it appears without the heading
+    # Match standalone table that looks like market data (Symbol | Price | Change | %)
+    standalone_pattern = r'\|\s*Symbol\s*\|\s*Price\s*\|\s*Change\s*\|\s*%\s*\|[\r\n]+\s*\|[-:\s|]+\|[\r\n]+(?:\s*\|[^\n]+\|[\r\n]+)+'
+    cleaned = re.sub(standalone_pattern, '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
+
+    return cleaned

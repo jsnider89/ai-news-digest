@@ -7,6 +7,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8002}:${PORT:-8002}"
+    networks:
+      - ai-news-digest-network
+      - traefik
     volumes:
       - ./data:/data
       - ./config:/app/config
@@ -16,18 +19,26 @@ services:
       - DATA_DIR=/data
       - DATABASE_URL=sqlite+aiosqlite:///data/app.db
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8000}/api/status/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8002}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     depends_on: []
-    networks:
-      - ai-news-digest-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.digest.rule=Host(`digest.externalaccesshome.com`)"
+      - "traefik.http.routers.digest.entrypoints=https"
+      - "traefik.http.routers.digest.tls=true"
+      - "traefik.http.routers.digest.tls.certresolver=cloudflare"
+      - "traefik.http.services.digest.loadbalancer.server.port=8002"
 
 networks:
   ai-news-digest-network:
     driver: bridge
+  traefik:
+    external: true
 
 volumes:
   data:
