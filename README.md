@@ -6,6 +6,8 @@ An intelligent newsletter aggregator that uses AI to curate and summarize news f
 
 - **AI-Powered Analysis**: Uses OpenAI, Google Gemini, or Anthropic Claude to generate intelligent summaries
 - **Multi-Provider Fallback**: Automatically switches between AI providers if one fails
+- **Modular Architecture**: AI providers separated into independent modules for easy extension
+- **Runtime Configuration**: Change AI models and settings via UI without restarting
 - **Multiple Newsletters**: Create and manage different newsletters with custom RSS feeds
 - **Flexible Scheduling**: Schedule newsletters at specific times with timezone support
 - **Web Admin Interface**: Modern React-based UI for configuration and monitoring
@@ -57,10 +59,18 @@ An intelligent newsletter aggregator that uses AI to curate and summarize news f
 Key configuration options in `.env`:
 
 ```bash
-# AI Provider (at least one required)
+# AI Provider API Keys (at least one required)
 OPENAI_API_KEY="your_key_here"
 GEMINI_API_KEY="your_key_here"
 ANTHROPIC_API_KEY="your_key_here"
+
+# AI Model Configuration
+PRIMARY_MODEL="gpt-5-mini"
+SECONDARY_MODEL="gemini-2.5-flash"
+REASONING_LEVEL="medium"
+
+# Available Models (optional - customize model catalog)
+AVAILABLE_MODELS="gpt-5-mini:GPT-5 Mini (OpenAI):openai:true,gemini-2.5-flash:Gemini 2.5 Flash (Google):gemini:false,..."
 
 # Email Configuration
 RESEND_API_KEY="your_key_here"
@@ -71,6 +81,8 @@ DEFAULT_RECIPIENTS="your-email@example.com"
 DEFAULT_TIMEZONE="America/Denver"
 DEFAULT_SEND_TIMES="06:30,17:30"
 ```
+
+**Note:** Most settings can be changed via the web UI and will apply immediately without restart. The `.env` file provides defaults.
 
 See `.env.example` for all available options.
 
@@ -85,6 +97,22 @@ See `.env.example` for all available options.
    - Schedule times
    - Newsletter type (General, Tech, Market, etc.)
 5. Save and activate
+
+### Adding Custom AI Models
+
+You can add new AI models without code changes by updating `AVAILABLE_MODELS` in `.env`:
+
+```bash
+# Format: model_id:Display Label:provider:supports_reasoning
+AVAILABLE_MODELS="gpt-5-mini:GPT-5 Mini (OpenAI):openai:true,gpt-6:GPT-6 (OpenAI):openai:true,gemini-3.0-pro:Gemini 3.0 Pro (Google):gemini:false"
+```
+
+This allows you to:
+- Add newly released models as they become available
+- Customize model display names
+- Specify reasoning support for OpenAI models
+
+Changes apply after container restart.
 
 ## API Endpoints
 
@@ -112,19 +140,26 @@ uvicorn app.web.main:app --reload --port 8002
 ```
 .
 ├── app/
-│   ├── ai/          # AI provider integrations
-│   ├── config/      # Configuration management
-│   ├── data/        # Database models and repositories
-│   ├── email/       # Email rendering and delivery
-│   ├── ingest/      # RSS feed ingestion
-│   ├── tasks/       # Background task scheduling
-│   ├── utils/       # Utility functions
-│   └── web/         # FastAPI web application
-├── config/          # Configuration files
-├── data/            # Database and persistent data
-├── docker/          # Docker-related files
-├── frontend/        # React admin interface
-└── requirements.txt # Python dependencies
+│   ├── ai/
+│   │   ├── providers/    # Modular AI provider implementations
+│   │   │   ├── base.py       # Base provider interface
+│   │   │   ├── openai.py     # OpenAI (GPT-4, GPT-5)
+│   │   │   ├── gemini.py     # Google Gemini
+│   │   │   └── anthropic.py  # Anthropic Claude
+│   │   ├── client.py     # AI client orchestrator
+│   │   └── prompts.py    # Prompt templates
+│   ├── config/       # Configuration management
+│   ├── data/         # Database models and repositories
+│   ├── email/        # Email rendering and delivery
+│   ├── ingest/       # RSS feed ingestion
+│   ├── tasks/        # Background task scheduling
+│   ├── utils/        # Utility functions
+│   └── web/          # FastAPI web application
+├── config/           # Configuration files
+├── data/             # Database and persistent data
+├── docker/           # Docker-related files
+├── frontend/         # React admin interface
+└── requirements.txt  # Python dependencies
 ```
 
 ## Troubleshooting
