@@ -83,7 +83,12 @@ class NewsletterPipeline:
         started_at = started_at_local.astimezone(timezone.utc).replace(tzinfo=None)
         logger.info("Starting newsletter run for %s", config.name)
 
-        ai_client = AIClient()
+        # Load database overrides for AI model settings
+        from app.data.database import SessionLocal
+        async with SessionLocal() as session:
+            db_overrides = await repositories.get_global_settings(session)
+
+        ai_client = AIClient(db_overrides=db_overrides)
         rss_fetcher = RSSFetcher()
         market_client = MarketDataClient(api_key=os.getenv("FINNHUB_API_KEY"))
 

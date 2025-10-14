@@ -22,9 +22,25 @@ _PROVIDER_MAP = {
 class AIClient:
     """Factory and dispatcher for provider cascade."""
 
-    def __init__(self, pipeline: Sequence[ProviderConfig] | None = None) -> None:
+    def __init__(
+        self,
+        pipeline: Sequence[ProviderConfig] | None = None,
+        db_overrides: dict | None = None
+    ) -> None:
+        """Initialize AI client with optional database setting overrides.
+
+        Args:
+            pipeline: Optional provider configuration pipeline
+            db_overrides: Optional database settings (primary_model, secondary_model, reasoning_level)
+        """
         base_pipeline = list(pipeline or load_pipeline())
         settings = get_settings()
+
+        # Load model settings with database overrides taking precedence
+        overrides = db_overrides or {}
+        primary_model = overrides.get("primary_model", settings.primary_model)
+        secondary_model = overrides.get("secondary_model", settings.secondary_model)
+        reasoning_level = overrides.get("reasoning_level", settings.reasoning_level)
 
         def build_config(model_value: str) -> ProviderConfig | None:
             option = get_model_option(model_value)
@@ -33,18 +49,18 @@ class AIClient:
                 return None
             config = ProviderConfig(provider=option.provider, model=option.value)
             if option.provider == "openai":
-                config.reasoning_effort = settings.reasoning_level
+                config.reasoning_effort = reasoning_level
                 config.verbosity = "medium"
             return config
 
         configs: list[ProviderConfig] = []
 
-        primary_config = build_config(settings.primary_model)
+        primary_config = build_config(primary_model)
         if primary_config:
             configs.append(primary_config)
 
-        if settings.secondary_model and settings.secondary_model != settings.primary_model:
-            secondary_config = build_config(settings.secondary_model)
+        if secondary_model and secondary_model != primary_model:
+            secondary_config = build_config(secondary_model)
             if secondary_config and all(secondary_config.provider != existing.provider for existing in configs):
                 configs.append(secondary_config)
 
